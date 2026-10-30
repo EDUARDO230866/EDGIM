@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>EDGIM</title>
+<meta name="theme-color" content="#2E7D5B">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <main id="view" tabindex="-1"></main>
+</div>
+
+<nav class="tabbar" aria-label="Secciones">
+  <button data-tab="hoy" class="tab" aria-label="Entreno"><svg viewBox="0 0 24 24"><path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12"/></svg><span>Entreno</span></button>
+  <button data-tab="ejercicios" class="tab" aria-label="Ejercicios"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Ejercicios</span></button>
+  <button data-tab="rutina" class="tab" aria-label="Rutina"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3v4M16 3v4M4 10h16"/></svg><span>Rutina</span></button>
+  <button data-tab="dieta" class="tab" aria-label="Dieta"><svg viewBox="0 0 24 24"><path d="M12 21c-4.5 0-7-3.5-7-8 0-4 2.5-6 4.5-6 1.2 0 1.8.6 2.5.6s1.3-.6 2.5-.6c2 0 4.5 2 4.5 6 0 4.5-2.5 8-7 8z"/><path d="M12 7c0-2 1-4 3-4"/></svg><span>Dieta</span></button>
+  <button data-tab="progreso" class="tab" aria-label="Progreso"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.5-2.5h5L16 6"/></svg><span>Progreso</span></button>
+  <button data-tab="rango" class="tab" aria-label="Rango"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M12 8v6M9.5 10.5h5"/></svg><span>Rango</span></button>
+</nav>
+
+<div id="sheet" class="sheet-wrap" hidden>
+  <div class="sheet-backdrop" data-action="close-sheet"></div>
+  <div class="sheet" role="dialog" aria-modal="true"><div id="sheet-body"></div></div>
+</div>
+
+<div id="timer" class="timer" hidden></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="data.js"></script>
+<!-- auth.js carga app.js cuando la sesión y los datos están listos (o de inmediato sin cuentas) -->
+<script src="auth.js"></script>
+</body>
+</html>

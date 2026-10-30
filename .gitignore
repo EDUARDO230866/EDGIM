@@ -1,0 +1,15 @@
+# Respaldos con tus datos personales (fotos, peso, entrenos)
+edgim-respaldo-*.json
+repa-respaldo-*.json
+
+# Archivos del sistema y editores
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+.claude/
+
+# Llaves o variables locales
+.env
+*.key
