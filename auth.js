@@ -16,10 +16,21 @@
 
   if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) return loadApp();
 
+  // Modo sin conexión con la copia local del último usuario: lo que anotes queda pendiente
+  // y se fusiona con la nube al abrir la app con internet
+  function openOffline(last) {
+    const key = "edgim.u." + last.id;
+    window.EDGIM_STORE_KEY = key;
+    window.EDGIM_USER = { ...last, offline: true };
+    window.EDGIM_SYNC = () => { localStorage.setItem(key + ".pending", "1"); localStorage.setItem(key + ".localAt", String(Date.now())); };
+    addEventListener("online", () => location.reload(), { once: true });
+    loadApp();
+  }
+
   // La librería no cargó (sin internet): abre con la copia local del último usuario
   if (!window.supabase?.createClient) {
     const last = parse(localStorage.getItem(LAST_USER));
-    if (last) { window.EDGIM_STORE_KEY = "edgim.u." + last.id; window.EDGIM_USER = { ...last, offline: true }; return loadApp(); }
+    if (last) return openOffline(last);
     tabbar.hidden = true;
     view.innerHTML = `<div class="auth"><p class="auth-brand">EDGIM</p><section class="card"><h2>Sin conexión</h2><p class="small muted">Necesitas internet para iniciar sesión la primera vez. Revisa tu conexión y recarga la página.</p></section></div>`;
     return;
@@ -111,21 +122,37 @@
     });
   }
 
+  // Campos de cada dispositivo que nunca viajan a la nube: la API key, el entreno en curso y la pestaña abierta
+  function withLocal(data, local) {
+    data.settings = { ...(data.settings || {}), apiKey: local?.settings?.apiKey || "" };
+    data.active = local?.active ?? null;
+    data.tab = local?.tab || data.tab || "hoy";
+    return data;
+  }
+  const forCloud = (s) => { const d = JSON.parse(JSON.stringify(s)); if (d.settings) d.settings.apiKey = ""; delete d.active; delete d.tab; return d; };
+
   // Fusiona dos versiones de los datos: listas por id (o fecha), registro de cardio por fecha
-  // y el resto lo gana la versión más reciente. La API key siempre es la de este navegador.
+  // y el resto lo gana la versión más reciente. Lo borrado queda anotado en "deleted" (180 días)
+  // para que no reviva al fusionar con un dispositivo que tenía la versión vieja.
   function merge(local, remote, localNewer) {
     const [older, newer] = localNewer ? [remote, local] : [local, remote];
-    const union = (field, k) => { const m = new Map(); for (const x of older[field] || []) m.set(x[k], x); for (const x of newer[field] || []) m.set(x[k], x); return [...m.values()]; };
-    const out = { ...older, ...newer };
+    const deleted = { ...(older.deleted || {}), ...(newer.deleted || {}) };
+    const cutoff = Date.now() - 180 * 864e5;
+    for (const k of Object.keys(deleted)) if (deleted[k] < cutoff) delete deleted[k];
+    const union = (field, k) => {
+      const m = new Map();
+      for (const x of older[field] || []) m.set(x[k], x);
+      for (const x of newer[field] || []) m.set(x[k], x);
+      return [...m.values()].filter((x) => !deleted[`${field}:${x[k]}`]);
+    };
+    const out = { ...older, ...newer, deleted };
     out.sessions = union("sessions", "id").sort((a, b) => a.date.localeCompare(b.date));
     out.photos = union("photos", "id");
     out.sources = union("sources", "id");
     out.weights = union("weights", "date");
     out.cardio = { ...(older.cardio || {}), ...(newer.cardio || {}), log: { ...(older.cardio?.log || {}), ...(newer.cardio?.log || {}) } };
-    out.settings = { ...(out.settings || {}), apiKey: local.settings?.apiKey || "" };
-    return out;
+    return withLocal(out, local);
   }
-  const forCloud = (s) => { const d = JSON.parse(JSON.stringify(s)); if (d.settings) d.settings.apiKey = ""; return d; };
 
   async function enter(user) {
     loading("Cargando tus datos…");
@@ -143,7 +170,7 @@
     const readRow = (cols) => sb.from(TABLE).select(cols).eq("user_id", uid).maybeSingle();
 
     /* Subida de datos: antes de escribir revisa si otro dispositivo cambió algo desde nuestra última lectura */
-    let pushing = null;
+    let pushing = null, lastCloud = "";
     function push() {
       if (pushing) return pushing;
       pushing = (async () => {
@@ -161,6 +188,7 @@
         const { data: saved, error: e3 } = await sb.from(TABLE).upsert({ user_id: uid, data: forCloud(data), updated_at: new Date().toISOString() }).select("updated_at").single();
         if (e3) { console.warn("EDGIM: no se pudo sincronizar", e3.message); return; }
         localStorage.setItem(K.remoteAt, saved.updated_at);
+        lastCloud = JSON.stringify(forCloud(data));
         if (localAt() <= startedAt) localStorage.removeItem(K.pending);
       })().catch((e) => console.warn("EDGIM: sincronización pendiente", e)).finally(() => { pushing = null; });
       return pushing;
@@ -170,19 +198,22 @@
       const { data: row, error } = await readRow("data, updated_at");
       if (error || !row || row.updated_at === localStorage.getItem(K.remoteAt)) return;
       if (localStorage.getItem(K.pending)) return push();
-      const data = row.data;
-      data.settings = { ...(data.settings || {}), apiKey: current()?.settings?.apiKey || "" };
+      const data = withLocal(row.data, current());
       localStorage.setItem(K.remoteAt, row.updated_at);
+      lastCloud = JSON.stringify(forCloud(data));
       window.EDGIM_REPLACE?.(data);
     }
-    // Al cerrar la página no hay tiempo de esperar respuestas: envío directo con keepalive
+    // Al cerrar la página no hay tiempo de esperar respuestas: envío directo con keepalive,
+    // pero solo si la nube sigue igual que en nuestra última lectura (si otro dispositivo
+    // subió algo, no se escribe nada y la fusión se hace la próxima vez que abras la app)
     function beacon() {
-      if (!localStorage.getItem(K.pending) || !token) return;
-      const body = JSON.stringify({ user_id: uid, data: forCloud(current()), updated_at: new Date().toISOString() });
+      const remoteAt = localStorage.getItem(K.remoteAt);
+      if (!localStorage.getItem(K.pending) || !token || !remoteAt) return;
+      const body = JSON.stringify({ data: forCloud(current()), updated_at: new Date().toISOString() });
       if (body.length > 60000) { push(); return; } // keepalive admite ~64 KB
-      fetch(`${cfg.supabaseUrl}/rest/v1/${TABLE}?on_conflict=user_id`, {
-        method: "POST", keepalive: true, body,
-        headers: { apikey: cfg.supabaseAnonKey, Authorization: "Bearer " + token, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+      fetch(`${cfg.supabaseUrl}/rest/v1/${TABLE}?user_id=eq.${uid}&updated_at=eq.${encodeURIComponent(remoteAt)}`, {
+        method: "PATCH", keepalive: true, body,
+        headers: { apikey: cfg.supabaseAnonKey, Authorization: "Bearer " + token, "Content-Type": "application/json", Prefer: "return=minimal" },
       }).catch(() => {});
     }
 
@@ -218,9 +249,7 @@
         const data = row.updated_at === localStorage.getItem(K.remoteAt) ? local : merge(local, row.data, localAt() > Date.parse(row.updated_at));
         localStorage.setItem(key, JSON.stringify(data));
       } else {
-        const remote = row.data;
-        remote.settings = { ...(remote.settings || {}), apiKey: local?.settings?.apiKey || "" };
-        localStorage.setItem(key, JSON.stringify(remote));
+        localStorage.setItem(key, JSON.stringify(withLocal(row.data, local)));
         localStorage.setItem(K.remoteAt, row.updated_at);
       }
     } else {
@@ -241,10 +270,16 @@
       if (localStorage.getItem(key)) localStorage.setItem(K.pending, "1");
     }
     if (!error && localStorage.getItem(K.pending)) await push();
+    if (!lastCloud && current()) lastCloud = localStorage.getItem(K.pending) ? "" : JSON.stringify(forCloud(current()));
 
     /* Ganchos que usa app.js */
     let t;
-    window.EDGIM_SYNC = () => { localStorage.setItem(K.pending, "1"); localStorage.setItem(K.localAt, String(Date.now())); clearTimeout(t); t = setTimeout(push, 1500); };
+    // Solo marca pendiente si cambió algo que viaja a la nube (no el entreno en curso ni la pestaña)
+    window.EDGIM_SYNC = () => {
+      if (JSON.stringify(forCloud(current())) === lastCloud) return;
+      localStorage.setItem(K.pending, "1"); localStorage.setItem(K.localAt, String(Date.now()));
+      clearTimeout(t); t = setTimeout(push, 1500);
+    };
     window.EDGIM_FILES = {
       put: (id, blob) => { setQueue([...queue(), id]); return upload(id, blob); },
       get: async (id) => { const { data, error: e } = await sb.storage.from(BUCKET).download(`${uid}/${id}`); return e ? null : data; },
@@ -255,6 +290,11 @@
       clearTimeout(t);
       if (localStorage.getItem(K.pending)) await push();
       await retryQueue();
+      // Sin internet: no borra lo que aún no llega a la nube sin preguntar
+      if (localStorage.getItem(K.pending) || queue().length) {
+        const lose = await ask("Tienes cambios sin subir", `No se pudieron subir ${queue().length ? `${queue().length} foto(s) o documento(s) y ` : ""}tus últimos cambios porque no hay conexión. Si cierras sesión ahora se pierden. Conéctate a internet y vuelve a intentarlo.`, "Cerrar sesión y perderlos", "Cancelar");
+        if (!lose) { tabbar.hidden = false; window.render?.(); return; }
+      }
       await sb.auth.signOut();
       // No deja tus datos en este navegador: copia local, marcas de sincronización, cola y archivos
       [key, K.pending, K.remoteAt, K.localAt, K.queue, LAST_USER].forEach((k) => localStorage.removeItem(k));
@@ -277,5 +317,9 @@
 
   sb.auth.onAuthStateChange((event) => { if (event === "PASSWORD_RECOVERY") { mode = "nueva"; msg = ""; show(); } });
   loading("Abriendo EDGIM…");
-  sb.auth.getSession().then(({ data: { session } }) => (session && !isRecovery ? enter(session.user) : show()));
+  // Sin internet y con la sesión vencida, abre con la copia local del último usuario en vez del login
+  const offlineOrLogin = () => { const last = parse(localStorage.getItem(LAST_USER)); if (last && !navigator.onLine) openOffline(last); else show(); };
+  sb.auth.getSession()
+    .then(({ data: { session } }) => (session && !isRecovery ? enter(session.user) : offlineOrLogin()))
+    .catch(offlineOrLogin);
 })();

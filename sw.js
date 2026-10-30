@@ -2,7 +2,7 @@
    - Archivos de la app y librería de Supabase: primero caché (y se actualizan en segundo plano).
    - Supabase y la API de Claude: primero red; las peticiones que no son GET nunca pasan por la caché.
    Al publicar cambios grandes, sube CACHE (edgim-v2, v3…) para borrar la caché vieja. */
-const CACHE = "edgim-v1";
+const CACHE = "edgim-v2";
 const SUPABASE_LIB = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js";
 const APP_FILES = ["./", "index.html", "styles.css", "config.js", "data.js", "auth.js", "app.js", "manifest.json", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", SUPABASE_LIB];
 

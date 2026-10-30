@@ -160,6 +160,8 @@ function bestOf(exId, variant) {
   return best;
 }
 const setsStr = (sets) => sets.map((s) => `${num(s.r)}×${num(s.w)}`).join(" · ");
+// Anota lo borrado (lista:id) para que la sincronización no lo reviva desde otro dispositivo
+const markDeleted = (list, id) => { (state.deleted ||= {})[`${list}:${id}`] = Date.now(); };
 
 /* ---------- Render principal ---------- */
 const view = $("#view");
@@ -300,7 +302,7 @@ function saveSessionEdit(id, v) {
   const s = state.sessions.find((x) => x.id === id);
   if (!s) return;
   s.entries = s.entries.map((e, ei) => ({ ...e, sets: e.sets.map((st, si) => ({ w: num(v[`w-${ei}-${si}`]), r: num(v[`r-${ei}-${si}`]), del: !!v[`x-${ei}-${si}`] })).filter((st) => !st.del && st.r > 0).map(({ w, r }) => ({ w, r })) })).filter((e) => e.sets.length);
-  if (!s.entries.length) state.sessions = state.sessions.filter((x) => x.id !== id);
+  if (!s.entries.length) { state.sessions = state.sessions.filter((x) => x.id !== id); markDeleted("sessions", id); }
   save(); closeSheet(); render(); toast(s.entries.length ? "Entreno actualizado" : "Entreno borrado: ya no tenía series");
 }
 
@@ -1661,7 +1663,7 @@ document.addEventListener("click", async (ev) => {
     case "timer-add": timerEnd += 30000; tickTimer(); break;
     case "timer-stop": stopTimer(); break;
     case "edit-session": openSheet(() => sessionEditSheet(d.id)); break;
-    case "del-session": confirmBox("¿Borrar este entreno del historial?", "Borrar", () => { state.sessions = state.sessions.filter((s) => s.id !== d.id); save(); render(); }); break;
+    case "del-session": confirmBox("¿Borrar este entreno del historial?", "Borrar", () => { state.sessions = state.sessions.filter((s) => s.id !== d.id); markDeleted("sessions", d.id); save(); render(); }); break;
     case "picker": ui.picker = { mode: d.mode, day: +d.d }; ui.query = ""; openSheet(pickerSheet); setTimeout(() => $("#picker-q")?.focus(), 50); break;
     case "pick": {
       if (ui.picker.mode === "session") { act.entries.push(newEntry(d.id)); closeSheet(); save(); render(); setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 30); }
@@ -1675,7 +1677,7 @@ document.addEventListener("click", async (ev) => {
     case "detail-var": ui.detailVar = +d.v; refreshSheet(); break;
     case "del-ex": confirmBox("¿Borrar este ejercicio?", "Borrar", () => { state.customExercises = state.customExercises.filter((e) => e.id !== d.id); state.routine.days.forEach((dy) => (dy.items = dy.items.filter((it) => it.exId !== d.id))); save(); render(); }); break;
     // Rutina (el resto de acciones de rutina viven en su sección, con prefijo r-)
-    case "del-src": { const s = state.sources.find((x) => x.id === d.id); if (s?.fileId) fileDel(s.fileId); state.sources = state.sources.filter((x) => x.id !== d.id); save(); render(); break; }
+    case "del-src": { const s = state.sources.find((x) => x.id === d.id); if (s?.fileId) fileDel(s.fileId); state.sources = state.sources.filter((x) => x.id !== d.id); markDeleted("sources", d.id); save(); render(); break; }
     case "settings": openSheet(settingsSheet); break;
     case "ai-discard": aiCleanupPending(false); ui.aiResult = null; save(); render(); break;
     case "export": exportBackup(); break;
@@ -1691,7 +1693,7 @@ document.addEventListener("click", async (ev) => {
         render();
       } else openSheet(() => photoViewSheet(d.id));
       break;
-    case "del-photo": confirmBox("¿Borrar esta foto?", "Borrar", async () => { const p = state.photos.find((x) => x.id === d.id); if (p) await fileDel(p.fileId); state.photos = state.photos.filter((x) => x.id !== d.id); save(); render(); }); break;
+    case "del-photo": confirmBox("¿Borrar esta foto?", "Borrar", async () => { const p = state.photos.find((x) => x.id === d.id); if (p) await fileDel(p.fileId); state.photos = state.photos.filter((x) => x.id !== d.id); markDeleted("photos", d.id); save(); render(); }); break;
   }
 });
 
