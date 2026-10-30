@@ -26,9 +26,10 @@ create policy "edgim editar propios" on public.edgim_data for update to authenti
 create policy "edgim borrar propios" on public.edgim_data for delete to authenticated using (auth.uid() = user_id);
 
 -- 2. Fotos y documentos: bucket privado, cada usuario en su carpeta <user_id>/
-insert into storage.buckets (id, name, public)
-values ('edgim', 'edgim', false)
-on conflict (id) do nothing;
+-- Límite de 25 MB por archivo (igual que el límite de PDF de la app); cualquier tipo de archivo
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('edgim', 'edgim', false, 26214400)
+on conflict (id) do update set file_size_limit = excluded.file_size_limit;
 
 drop policy if exists "edgim fotos leer" on storage.objects;
 drop policy if exists "edgim fotos subir" on storage.objects;

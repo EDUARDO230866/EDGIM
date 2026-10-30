@@ -34,7 +34,21 @@ No abras `index.html` con doble clic: el navegador no guarda bien los datos cuan
 2. Entra a **Add file → Upload files** y arrastra todos los archivos de esta carpeta. El `.gitignore` y el `.nojekyll` pueden no verse en el explorador de Windows; no pasa nada si no se suben.
 3. Da clic en **Commit changes**.
 4. Ve a **Settings → Pages**. En *Source* elige **Deploy from a branch**, rama **main**, carpeta **/ (root)**, y guarda.
-5. En uno o dos minutos tu app queda en `https://TU-USUARIO.github.io/edgim/`. Ábrela en el celular y usa **Agregar a pantalla de inicio**.
+5. En uno o dos minutos tu app queda en `https://TU-USUARIO.github.io/edgim/`.
+
+Sube también la carpeta `icons/`: arrastra la carpeta completa a la misma pantalla de *Upload files*.
+
+## Instalarla como app (PWA)
+
+EDGIM se instala como una app normal, con su ícono, en pantalla completa y **abre sin internet**.
+
+- **Android (Chrome):** abre el link → menú **⋮** → **Instalar app** (o *Agregar a pantalla principal*).
+- **iPhone (Safari):** abre el link → **Compartir** → **Agregar a inicio**.
+- **Computadora (Chrome o Edge):** ícono de instalar en la barra de direcciones.
+
+Sin internet puedes registrar entrenos, cardio y peso. Con cuentas, los cambios se suben solos cuando vuelve la conexión. Las funciones con Claude sí necesitan internet.
+
+**Al publicar una actualización:** sube los archivos cambiados. La app se actualiza sola en segundo plano y muestra la versión nueva la siguiente vez que la abres. Si cambias muchos archivos, sube también `sw.js` con un número de versión nuevo en `const CACHE = "edgim-v2"` para forzar la actualización.
 
 ## Inicio de sesión (cuentas para varias personas)
 
@@ -58,6 +72,17 @@ Usa [Supabase](https://supabase.com) (plan gratis). Se configura una sola vez:
 
 Listo: al abrir la app aparece la pantalla para **Entrar** o **Crear cuenta**. Al crear una cuenta llega un correo de confirmación. También funciona **Olvidé mi contraseña**.
 
+### Cerrar los registros nuevos (opcional)
+
+Cuando ya estén dentro todas las personas que quieres, evita que extraños creen cuentas: en Supabase entra a **Authentication → Sign In / Providers** (o *Authentication → Settings*) y desactiva **Allow new users to sign up**. Quien ya tiene cuenta puede seguir entrando. Para invitar a alguien después, usa **Authentication → Users → Invite user**.
+
+### Sincronización
+
+- Los cambios se suben unos segundos después de hacerlos, y al instante cuando cambias de app o cierras la página.
+- Si usas dos dispositivos, la app junta los entrenos, fotos, pesos, artículos y registros de cardio de ambos. En lo demás (rutina, dieta, ajustes) gana el cambio más reciente.
+- Si una foto no se pudo subir (sin internet), queda en espera y se sube sola al volver la conexión.
+- Si ya habías corrido `supabase-setup.sql` antes, córrelo otra vez: ahora pone un límite de 25 MB por archivo.
+
 - La *anon public key* puede ser pública: la protegen las reglas de `supabase-setup.sql`. **Nunca** pongas la *service_role key* en `config.js`.
 - Si dejas `config.js` vacío, la app funciona sin cuentas, con los datos solo en ese navegador.
 - La primera vez que entras, si el navegador ya tenía datos (entrenos, fotos), la app pregunta si quieres pasarlos a tu cuenta.
@@ -74,6 +99,9 @@ Listo: al abrir la app aparece la pantalla para **Entrar** o **Crear cuenta**. A
 
 El coach de fotos, la creación de rutinas con tus artículos, el ajuste de descargas y el menú con IA usan la API de Anthropic. Pega tu API key en **Rutina → ⚙ Ajustes**. Se guarda solo en tu navegador y cada consulta consume saldo de tu cuenta de Anthropic.
 
+- El modelo por defecto es **Claude Sonnet 5.5**. En Ajustes puedes cambiar a Opus 5.5 (más caro) o Haiku 5.5 (más barato).
+- **Pon un límite de gasto** en console.anthropic.com (Settings → Limits).
+
 ## Archivos
 
 | Archivo | Para qué sirve |
@@ -85,3 +113,6 @@ El coach de fotos, la creación de rutinas con tus artículos, el ajuste de desc
 | `auth.js` | Inicio de sesión y sincronización con Supabase |
 | `config.js` | Datos de tu proyecto de Supabase (vacío = sin cuentas) |
 | `supabase-setup.sql` | Tabla, almacenamiento de fotos y reglas de seguridad |
+| `manifest.json` | Nombre, colores e íconos para instalarla como app |
+| `sw.js` | Service worker: guarda la app para que abra sin internet |
+| `icons/` | Íconos de la app (192, 512 y el de iPhone) |
